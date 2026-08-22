@@ -2,15 +2,20 @@ import type {
   AttributionType,
   BadCase,
   Dashboard,
+  DeliveryUnitDetail,
+  DeliveryUnitPage,
   Evidence,
   SessionSummary,
   SkillSummary,
 } from "./types";
 
 async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const headers = options.body === undefined
+    ? options.headers ?? {}
+    : { "Content-Type": "application/json", ...options.headers };
   const response = await fetch(url, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers },
+    headers,
   });
   const body = (await response.json()) as T & { error?: string };
   if (!response.ok) throw new Error(body.error ?? `请求失败：${response.status}`);
@@ -20,6 +25,10 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   getDashboard: () => request<Dashboard>("/api/dashboard"),
   getSessions: () => request<{ items: SessionSummary[] }>("/api/sessions?limit=60"),
+  getDeliveryUnits: (offset = 0, limit = 20) =>
+    request<DeliveryUnitPage>(`/api/delivery-units?offset=${offset}&limit=${limit}`),
+  getDeliveryUnit: (deliveryRef: string) =>
+    request<DeliveryUnitDetail>(`/api/delivery-units/${encodeURIComponent(deliveryRef)}`),
   getSkills: () => request<{ items: SkillSummary[] }>("/api/skills"),
   registerSkill: (id: string) =>
     request<SkillSummary>(`/api/skills/${encodeURIComponent(id)}/register`, { method: "POST" }),

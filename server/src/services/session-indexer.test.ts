@@ -90,4 +90,48 @@ describe("indexSessions", () => {
       sourcePath: sessionFile,
     });
   });
+
+  it("attributes skills loaded through parallel tool calls and plugin paths", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "session-indexer-"));
+    const sessionFile = path.join(root, "rollout-parallel.jsonl");
+    const lines = [
+      {
+        type: "session_meta",
+        payload: {
+          id: "session-parallel",
+          timestamp: "2026-08-22T09:00:00.000Z",
+          cwd: "/workspace/example",
+        },
+      },
+      {
+        type: "event_msg",
+        payload: { type: "user_message", message: "请设计一个治理页面" },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          input:
+            'const results = await Promise.all([tools.exec_command({cmd:"cat /Users/example/.codex/skills/brainstorming/SKILL.md"}), tools.exec_command({cmd:"sed -n 1,200p /Users/example/.codex/plugins/cache/openai-bundled/visualize/1.0.22/skills/visualize/SKILL.md"})]);',
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          input:
+            'await tools.exec_command({workdir:"/workspace/example", cmd:`head -n 20 /Users/example/.codex/skills/product-thinking-partner/SKILL.md`});',
+        },
+      },
+    ];
+    await writeFile(sessionFile, `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`);
+
+    const sessions = await indexSessions(root, 10);
+
+    expect(sessions[0]?.loadedSkills).toEqual([
+      "brainstorming",
+      "product-thinking-partner",
+      "visualize:visualize",
+    ]);
+  });
 });

@@ -3,13 +3,14 @@
   "private": true,
   "version": "0.1.0",
   "workspaces": [
+    "adapter",
     "pc",
     "server"
   ],
   "scripts": {
     "dev": "concurrently -n server,pc -c yellow,cyan \"npm run dev -w server\" \"npm run dev -w pc\"",
-    "build": "npm run build -w server && npm run build -w pc",
-    "test": "npm run test -w server && npm run test -w pc"
+    "build": "npm run build -w adapter && npm run build -w server && npm run build -w pc",
+    "test": "npm run test -w adapter && npm run test -w server && npm run test -w pc"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

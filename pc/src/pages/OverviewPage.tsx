@@ -25,7 +25,8 @@ export function OverviewPage() {
         <>
           <PipelineStrip pipeline={data.pipeline} />
           <section className="totals-band" aria-label="运行统计">
-            <div><span>最近运行</span><strong>{data.totals.sessions}</strong></div>
+            <div><span>Delivery Unit</span><strong>{data.totals.deliveryUnits ?? data.totals.sessions}</strong></div>
+            <div><span>自动候选</span><strong>{data.totals.automaticCandidates ?? 0}</strong></div>
             <div><span>Bad Case</span><strong>{data.totals.badCases}</strong></div>
             <div><span>Evidence</span><strong>{data.totals.evidence}</strong></div>
             <div><span>已登记 Skill</span><strong>{data.totals.registeredSkills}</strong></div>

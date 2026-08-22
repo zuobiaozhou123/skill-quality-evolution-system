@@ -5,6 +5,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type {
   AttributionType,
   BadCase,
+  BadCaseCaptureSource,
   BadCaseStatus,
   SessionSignal,
 } from "../domain/types.js";
@@ -14,6 +15,10 @@ type BadCaseRow = {
   title: string;
   problem: string;
   expected_outcome: string;
+  delivery_ref: string | null;
+  capture_source: BadCaseCaptureSource;
+  user_feedback: string;
+  failure_reason: string;
   source_session_id: string | null;
   source_path: string | null;
   task_summary: string;
@@ -31,7 +36,7 @@ type BadCaseRow = {
   updated_at: string;
 };
 
-type CreateBadCaseInput = {
+export type CreateBadCaseInput = {
   title: string;
   problem?: string;
   expectedOutcome?: string;
@@ -40,6 +45,13 @@ type CreateBadCaseInput = {
   taskSummary?: string;
   skillNames?: string[];
   signalTypes?: SessionSignal[];
+};
+
+export type CreateCapturedBadCaseInput = CreateBadCaseInput & {
+  deliveryRef: string;
+  captureSource: Exclude<BadCaseCaptureSource, "manual">;
+  userFeedback: string;
+  failureReason: string;
 };
 
 const attributionTypes = new Set<AttributionType>([
@@ -59,6 +71,10 @@ function fromRow(row: BadCaseRow): BadCase {
     title: row.title,
     problem: row.problem,
     expectedOutcome: row.expected_outcome,
+    deliveryRef: row.delivery_ref,
+    captureSource: row.capture_source,
+    userFeedback: row.user_feedback,
+    failureReason: row.failure_reason,
     sourceSessionId: row.source_session_id,
     sourcePath: row.source_path,
     taskSummary: row.task_summary,
@@ -90,9 +106,10 @@ export class BadCaseService {
     this.database
       .prepare(`
         INSERT INTO bad_cases (
-          id, title, problem, expected_outcome, source_session_id, source_path,
+          id, title, problem, expected_outcome, delivery_ref, capture_source,
+          user_feedback, failure_reason, source_session_id, source_path,
           task_summary, skill_names, signal_types, status, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?)
+        ) VALUES (?, ?, ?, ?, NULL, 'manual', '', '', ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?)
       `)
       .run(
         id,
@@ -110,6 +127,50 @@ export class BadCaseService {
     return this.get(id);
   }
 
+  createFromCapture(
+    input: CreateCapturedBadCaseInput,
+  ): { badCase: BadCase; created: boolean } {
+    const deliveryRef = input.deliveryRef.trim();
+    if (!deliveryRef) throw new Error("Delivery Unit 引用不能为空");
+    const existing = this.findByDeliveryRef(deliveryRef);
+    if (existing) return { badCase: existing, created: false };
+    if (!input.title.trim()) throw new Error("标题不能为空");
+
+    const id = randomUUID();
+    const now = new Date().toISOString();
+    try {
+      this.database
+        .prepare(`
+          INSERT INTO bad_cases (
+            id, title, problem, expected_outcome, delivery_ref, capture_source,
+            user_feedback, failure_reason, source_session_id, source_path,
+            task_summary, skill_names, signal_types, status, created_at, updated_at
+          ) VALUES (?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_confirmation', ?, ?)
+        `)
+        .run(
+          id,
+          input.title.trim(),
+          input.problem?.trim() ?? "",
+          deliveryRef,
+          input.captureSource,
+          input.userFeedback.trim(),
+          input.failureReason.trim(),
+          input.sourceSessionId ?? null,
+          input.sourcePath ?? null,
+          input.taskSummary?.trim() ?? "",
+          JSON.stringify(input.skillNames ?? []),
+          JSON.stringify(input.signalTypes ?? []),
+          now,
+          now,
+        );
+      return { badCase: this.get(id), created: true };
+    } catch (error) {
+      const duplicate = this.findByDeliveryRef(deliveryRef);
+      if (duplicate) return { badCase: duplicate, created: false };
+      throw error;
+    }
+  }
+
   list(): BadCase[] {
     const rows = this.database
       .prepare("SELECT * FROM bad_cases ORDER BY created_at DESC")
@@ -123,6 +184,13 @@ export class BadCaseService {
       | undefined;
     if (!row) throw new Error("Bad Case 不存在");
     return fromRow(row);
+  }
+
+  findByDeliveryRef(deliveryRef: string): BadCase | null {
+    const row = this.database
+      .prepare("SELECT * FROM bad_cases WHERE delivery_ref = ?")
+      .get(deliveryRef) as BadCaseRow | undefined;
+    return row ? fromRow(row) : null;
   }
 
   update(

@@ -5,10 +5,42 @@ import readline from "node:readline";
 import type { SessionSignal, SessionSummary } from "../domain/types.js";
 
 const CORRECTION_PATTERN = /(?:不对|错了|错误|重新|重做|修正|wrong|incorrect|redo|retry)/i;
-const SKILL_PATH_PATTERN = /\.codex\/skills\/(?:\.system\/)?([^/"\\]+)\/SKILL\.md/g;
+const SKILL_PATH_PATTERN =
+  /\.codex\/(?:skills\/(?:\.system\/)?[^/"'\\\s]+|plugins\/[^"'\\\s]+\/skills\/[^/"'\\\s]+)\/SKILL\.md/g;
 const READ_COMMAND_PATTERN = /^\s*(?:sed|cat|head|tail|less|bat)\b/;
 
-function loadedSkillsFromToolInput(input: unknown): string[] {
+function skillNameFromPath(skillPath: string): string | null {
+  const parts = skillPath.split("/");
+  const codexIndex = parts.lastIndexOf(".codex");
+  if (codexIndex < 0) return null;
+
+  if (parts[codexIndex + 1] === "skills") {
+    const offset = parts[codexIndex + 2] === ".system" ? 3 : 2;
+    return parts[codexIndex + offset] ?? null;
+  }
+
+  if (parts[codexIndex + 1] === "plugins") {
+    const skillsIndex = parts.lastIndexOf("skills");
+    const skillName = parts[skillsIndex + 1];
+    const pluginName = parts[skillsIndex - 2];
+    if (skillsIndex > codexIndex && pluginName && skillName) return `${pluginName}:${skillName}`;
+  }
+
+  return null;
+}
+
+function decodedJavaScriptString(value: string, quote: string): string {
+  if (quote === '"') {
+    try {
+      return JSON.parse(`"${value}"`) as string;
+    } catch {
+      return value;
+    }
+  }
+  return value.replace(/\\([\\'`])/g, "$1");
+}
+
+export function loadedSkillsFromToolInput(input: unknown): string[] {
   const serialized = typeof input === "string" ? input : JSON.stringify(input ?? "");
   const commands: string[] = [];
   try {
@@ -18,26 +50,25 @@ function loadedSkillsFromToolInput(input: unknown): string[] {
     // Current Codex sessions store the inner tool call as JavaScript source.
   }
   for (const match of serialized.matchAll(
-    /\bawait\s+tools\.exec_command\(\s*\{\s*["']?cmd["']?\s*:\s*"((?:\\.|[^"\\])*)"/g,
+    /(?<!["'`\\])\btools\.exec_command\(\s*\{[\s\S]{0,1000}?\b["']?cmd["']?\s*:\s*(["'`])((?:\\.|(?!\1)[\s\S])*)\1/g,
   )) {
-    try {
-      commands.push(JSON.parse(`"${match[1]}"`) as string);
-    } catch {
-      continue;
-    }
+    commands.push(decodedJavaScriptString(match[2], match[1]));
   }
 
   const found = new Set<string>();
   for (const command of commands) {
     for (const segment of command.split(/[;\n]/)) {
       if (!READ_COMMAND_PATTERN.test(segment)) continue;
-      for (const match of segment.matchAll(SKILL_PATH_PATTERN)) found.add(match[1]);
+      for (const match of segment.matchAll(SKILL_PATH_PATTERN)) {
+        const skillName = skillNameFromPath(match[0]);
+        if (skillName) found.add(skillName);
+      }
     }
   }
   return [...found];
 }
 
-async function listJsonlFiles(root: string): Promise<string[]> {
+export async function listJsonlFiles(root: string): Promise<string[]> {
   const found: string[] = [];
 
   async function visit(directory: string): Promise<void> {

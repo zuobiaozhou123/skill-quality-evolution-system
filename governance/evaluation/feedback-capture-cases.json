@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "description": "Prompt-first Bad Case 合成反馈判定集；不含真实会话或敏感内容。",
+  "thresholds": {
+    "negativeCaptureRateMin": 0.9,
+    "nonNegativeFalsePositiveRateMax": 0.05,
+    "createdCaseAssociationAccuracyMin": 1
+  },
+  "pilotSkills": [
+    {
+      "category": "objective",
+      "skills": ["xlsx"],
+      "rationale": "公式、表头和行数等结果可直接核验。"
+    },
+    {
+      "category": "open_ended",
+      "skills": ["brainstorming"],
+      "rationale": "产出质量依赖用户的后续反馈，适合验证追加要求与负反馈的边界。"
+    },
+    {
+      "category": "routing_conflict",
+      "skills": ["requirements-analysis", "prd-writer"],
+      "rationale": "相邻的需求分析和 PRD 产出能验证上一轮实际使用 Skill 的归属，不按路由预期猜测。"
+    }
+  ],
+  "cases": [
+    {
+      "id": "OBJ-NEG-01",
+      "skillCategory": "objective",
+      "skillName": "xlsx",
+      "previousSkillUsed": true,
+      "feedbackType": "explicit_rejection",
+      "feedback": "不对，这个结果不能用。",
+      "expectedAction": "record"
+    },
+    {
+      "id": "OBJ-NEG-02",
+      "skillCategory": "objective",
+      "skillName": "xlsx",
+      "previousSkillUsed": true,
+      "feedbackType": "local_correction",
+      "feedback": "你把原公式覆盖成了静态值，请修正。",
+      "expectedAction": "record"
+    },
+    {
+      "id": "OBJ-NEG-03",
+      "skillCategory": "objective",
+      "skillName": "xlsx",
+      "previousSkillUsed": true,
+      "feedbackType": "rework_request",
+      "feedback": "这版数据列错位了，请重做。",
+      "expectedAction": "record"
+    },
+    {
+      "id": "OBJ-NON-01",
+      "skillCategory": "objective",
+      "skillName": "xlsx",
+      "previousSkillUsed": true,
+      "feedbackType": "supplement",
+      "feedback": "再增加一列环比增长率。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "OBJ-NON-02",
+      "skillCategory": "objective",
+      "skillName": "xlsx",
+      "previousSkillUsed": true,
+      "feedbackType": "continue",
+      "feedback": "继续处理第二个工作表。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "OBJ-NON-03",
+      "skillCategory": "objective",
+      "skillName": "xlsx",
+      "previousSkillUsed": true,
+      "feedbackType": "positive",
+      "feedback": "这样可以，保持这个格式。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "OBJ-NON-04",
+      "skillCategory": "objective",
+      "skillName": "xlsx",
+      "previousSkillUsed": true,
+      "feedbackType": "new_task",
+      "feedback": "接下来帮我整理一份会议纪要。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "OBJ-AMB-01",
+      "skillCategory": "objective",
+      "skillName": "xlsx",
+      "previousSkillUsed": true,
+      "feedbackType": "ambiguous_dissatisfaction",
+      "feedback": "好像还差点什么。",
+      "expectedAction": "clarify"
+    },
+    {
+      "id": "OPEN-NEG-01",
+      "skillCategory": "open_ended",
+      "skillName": "brainstorming",
+      "previousSkillUsed": true,
+      "feedbackType": "explicit_rejection",
+      "feedback": "这个方向不对，完全没有解决我的问题。",
+      "expectedAction": "record"
+    },
+    {
+      "id": "OPEN-NEG-02",
+      "skillCategory": "open_ended",
+      "skillName": "brainstorming",
+      "previousSkillUsed": true,
+      "feedbackType": "local_correction",
+      "feedback": "你把目标用户理解反了，应该是团队管理者。",
+      "expectedAction": "record"
+    },
+    {
+      "id": "OPEN-NEG-03",
+      "skillCategory": "open_ended",
+      "skillName": "brainstorming",
+      "previousSkillUsed": true,
+      "feedbackType": "rework_request",
+      "feedback": "这套架构太重了，请按最小方案重新设计。",
+      "expectedAction": "record"
+    },
+    {
+      "id": "OPEN-NON-01",
+      "skillCategory": "open_ended",
+      "skillName": "brainstorming",
+      "previousSkillUsed": true,
+      "feedbackType": "supplement",
+      "feedback": "再把企业版的约束也考虑进来。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "OPEN-NON-02",
+      "skillCategory": "open_ended",
+      "skillName": "brainstorming",
+      "previousSkillUsed": true,
+      "feedbackType": "continue",
+      "feedback": "继续，我们下一步讨论数据流。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "OPEN-NON-03",
+      "skillCategory": "open_ended",
+      "skillName": "brainstorming",
+      "previousSkillUsed": true,
+      "feedbackType": "positive",
+      "feedback": "这个架子对了，继续往下。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "OPEN-NON-04",
+      "skillCategory": "open_ended",
+      "skillName": "brainstorming",
+      "previousSkillUsed": true,
+      "feedbackType": "new_task",
+      "feedback": "先停一下，现在帮我查今天的日程。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "OPEN-AMB-01",
+      "skillCategory": "open_ended",
+      "skillName": "brainstorming",
+      "previousSkillUsed": true,
+      "feedbackType": "ambiguous_dissatisfaction",
+      "feedback": "我感觉有点不太对。",
+      "expectedAction": "clarify"
+    },
+    {
+      "id": "ROUTE-NEG-01",
+      "skillCategory": "routing_conflict",
+      "skillName": "requirements-analysis",
+      "previousSkillUsed": true,
+      "feedbackType": "explicit_rejection",
+      "feedback": "这不是我要的需求分析，结论不能用。",
+      "expectedAction": "record"
+    },
+    {
+      "id": "ROUTE-NEG-02",
+      "skillCategory": "routing_conflict",
+      "skillName": "prd-writer",
+      "previousSkillUsed": true,
+      "feedbackType": "local_correction",
+      "feedback": "你写错了状态流转，已发布后编辑应该产生新草稿。",
+      "expectedAction": "record"
+    },
+    {
+      "id": "ROUTE-NEG-03",
+      "skillCategory": "routing_conflict",
+      "skillName": "prd-writer",
+      "previousSkillUsed": true,
+      "feedbackType": "rework_request",
+      "feedback": "这版混入了太多未确认需求，删掉后重写。",
+      "expectedAction": "record"
+    },
+    {
+      "id": "ROUTE-NON-01",
+      "skillCategory": "routing_conflict",
+      "skillName": "requirements-analysis",
+      "previousSkillUsed": true,
+      "feedbackType": "supplement",
+      "feedback": "补充一个约束：本期只做单租户。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "ROUTE-NON-02",
+      "skillCategory": "routing_conflict",
+      "skillName": "requirements-analysis",
+      "previousSkillUsed": true,
+      "feedbackType": "continue",
+      "feedback": "继续进入功能拆解。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "ROUTE-NON-03",
+      "skillCategory": "routing_conflict",
+      "skillName": "prd-writer",
+      "previousSkillUsed": true,
+      "feedbackType": "positive",
+      "feedback": "这版 PRD 可以，保留当前结构。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "ROUTE-NON-04",
+      "skillCategory": "routing_conflict",
+      "skillName": "prd-writer",
+      "previousSkillUsed": true,
+      "feedbackType": "new_task",
+      "feedback": "另外帮我把这份文档翻译成英文。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "ROUTE-AMB-01",
+      "skillCategory": "routing_conflict",
+      "skillName": "requirements-analysis",
+      "previousSkillUsed": true,
+      "feedbackType": "ambiguous_dissatisfaction",
+      "feedback": "和我想的不太一样。",
+      "expectedAction": "clarify"
+    },
+    {
+      "id": "SCOPE-NO-SKILL-01",
+      "skillCategory": "none",
+      "skillName": null,
+      "previousSkillUsed": false,
+      "feedbackType": "explicit_rejection",
+      "feedback": "不对，请重新回答。",
+      "expectedAction": "ignore"
+    },
+    {
+      "id": "SCOPE-NO-SKILL-02",
+      "skillCategory": "none",
+      "skillName": null,
+      "previousSkillUsed": false,
+      "feedbackType": "rework_request",
+      "feedback": "这版需要全部重做。",
+      "expectedAction": "ignore"
+    }
+  ]
+}

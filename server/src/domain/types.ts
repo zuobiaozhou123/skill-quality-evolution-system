@@ -19,12 +19,55 @@ export type SessionSummary = {
   sourcePath: string;
 };
 
+export type DeliveryUnit = {
+  id: string;
+  deliveryRef: string;
+  threadId: string;
+  turnId: string;
+  startedAt: string;
+  completedAt: string;
+  cwd: string;
+  userRequest: string;
+  finalAnswer: string;
+  actualSkills: string[];
+  nextUserFeedback: string | null;
+  sourcePath: string;
+};
+
+export type DeliveryUnitDegradationReason =
+  | "legacy_format"
+  | "incomplete_turn"
+  | "missing_user_request"
+  | "missing_final_answer"
+  | "skill_not_proven";
+
+export type DeliveryUnitDiagnostic = {
+  threadId: string | null;
+  turnId: string | null;
+  sourcePath: string;
+  reason: DeliveryUnitDegradationReason;
+};
+
+export type DeliveryUnitIndexResult = {
+  units: DeliveryUnit[];
+  diagnostics: DeliveryUnitDiagnostic[];
+};
+
 export type BadCaseStatus =
   | "pending_confirmation"
   | "confirmed"
   | "rejected"
   | "attributed"
   | "assetized";
+
+export type BadCaseCaptureSource = "manual" | "prompt_first";
+
+export type CaptureEventStatus = "captured" | "duplicate" | "association_failed";
+
+export type CaptureAssociationError =
+  | "delivery_not_found"
+  | "delivery_invalid"
+  | "source_unavailable";
 
 export type AttributionType =
   | "skill_content_missing"
@@ -41,6 +84,10 @@ export type BadCase = {
   title: string;
   problem: string;
   expectedOutcome: string;
+  deliveryRef: string | null;
+  captureSource: BadCaseCaptureSource;
+  userFeedback: string;
+  failureReason: string;
   sourceSessionId: string | null;
   sourcePath: string | null;
   taskSummary: string;
@@ -54,6 +101,19 @@ export type BadCase = {
   attributedAt: string | null;
   rejectedAt: string | null;
   assetizedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CaptureEvent = {
+  id: string;
+  deliveryRef: string;
+  captureSource: BadCaseCaptureSource;
+  status: CaptureEventStatus;
+  userFeedback: string;
+  failureReason: string;
+  associationError: CaptureAssociationError | null;
+  badCaseId: string | null;
   createdAt: string;
   updatedAt: string;
 };

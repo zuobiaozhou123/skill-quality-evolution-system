@@ -1,6 +1,6 @@
-import { Button, Divider, Form, Input, Select, Space, Tag } from "antd";
+import { Alert, Button, Divider, Form, Input, Select, Space, Spin, Tag } from "antd";
 import { ArrowUpRight, Check, Save, X } from "lucide-react";
-import type { AttributionType, BadCase } from "../types";
+import type { AttributionType, BadCase, DeliveryUnitDetail } from "../types";
 
 const attributionOptions: Array<{ value: AttributionType; label: string }> = [
   { value: "skill_content_missing", label: "Skill 内容缺失" },
@@ -23,6 +23,9 @@ export const statusLabels: Record<BadCase["status"], { label: string; color: str
 
 type DetailProps = {
   item: BadCase;
+  delivery?: DeliveryUnitDetail;
+  deliveryError?: string;
+  deliveryLoading?: boolean;
   onSave: (values: Pick<BadCase, "title" | "problem" | "expectedOutcome">) => void | Promise<void>;
   onConfirm: () => void | Promise<void>;
   onReject: () => void | Promise<void>;
@@ -30,7 +33,17 @@ type DetailProps = {
   onPromote: () => void | Promise<void>;
 };
 
-export function BadCaseDetail({ item, onSave, onConfirm, onReject, onAttribute, onPromote }: DetailProps) {
+export function BadCaseDetail({
+  item,
+  delivery,
+  deliveryError,
+  deliveryLoading,
+  onSave,
+  onConfirm,
+  onReject,
+  onAttribute,
+  onPromote,
+}: DetailProps) {
   const [form] = Form.useForm();
   const [attributionForm] = Form.useForm();
   const editable = item.status === "pending_confirmation" || item.status === "confirmed";
@@ -38,9 +51,43 @@ export function BadCaseDetail({ item, onSave, onConfirm, onReject, onAttribute, 
   return (
     <div className="bad-case-detail">
       <div className="detail-meta-row">
-        <Tag color={statusLabels[item.status].color}>{statusLabels[item.status].label}</Tag>
-        <span>{item.sourceSessionId ? `会话 ${item.sourceSessionId.slice(0, 12)}` : "人工提交"}</span>
+        <Space size={6}>
+          <Tag color={statusLabels[item.status].color}>{statusLabels[item.status].label}</Tag>
+          <Tag>{item.captureSource === "prompt_first" ? "自动采集" : "人工提交"}</Tag>
+        </Space>
+        <span>{item.deliveryRef ? `交付 ${item.deliveryRef}` : item.sourceSessionId ? `会话 ${item.sourceSessionId.slice(0, 12)}` : "无运行关联"}</span>
       </div>
+
+      {item.captureSource === "prompt_first" && (
+        <div className="capture-evidence">
+          <section>
+            <h3>用户下一轮反馈</h3>
+            <div className="delivery-content">{item.userFeedback || "未读取到用户反馈"}</div>
+          </section>
+          <section>
+            <h3>自动判定原因</h3>
+            <div className="delivery-content">{item.failureReason || item.problem || "等待人工核查"}</div>
+          </section>
+        </div>
+      )}
+
+      {deliveryLoading && <div className="drawer-loading"><Spin size="small" /></div>}
+      {deliveryError && <Alert className="detail-context-alert" message={deliveryError} showIcon type="warning" />}
+      {delivery && (
+        <div className="bad-case-delivery-context">
+          <div className="detail-section-title">Delivery Context</div>
+          <section><h3>用户请求</h3><div className="delivery-content">{delivery.userRequest}</div></section>
+          <section><h3>最终交付</h3><div className="delivery-content">{delivery.finalAnswer}</div></section>
+          <section>
+            <h3>实际使用 Skill</h3>
+            <Space size={[4, 4]} wrap>
+              {delivery.actualSkills.map((skill) => <Tag key={skill}>{skill}</Tag>)}
+            </Space>
+          </section>
+        </div>
+      )}
+
+      {(item.captureSource === "prompt_first" || delivery || deliveryError) && <Divider />}
 
       <Form
         form={form}

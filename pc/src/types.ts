@@ -19,6 +19,50 @@ export type SessionSummary = {
   sourcePath: string;
 };
 
+export type DeliveryUnitSummary = {
+  deliveryRef: string;
+  threadId: string;
+  turnId: string;
+  completedAt: string;
+  cwd: string;
+  requestSummary: string;
+  resultSummary: string;
+  actualSkills: string[];
+  hasUserFeedback: boolean;
+};
+
+export type DeliveryUnitCaptureStatus =
+  | "not_captured"
+  | "captured"
+  | "duplicate"
+  | "association_failed";
+
+export type DeliveryUnitDetail = {
+  deliveryRef: string;
+  threadId: string;
+  turnId: string;
+  startedAt: string;
+  completedAt: string;
+  cwd: string;
+  userRequest: string;
+  finalAnswer: string;
+  actualSkills: string[];
+  nextUserFeedback: string | null;
+  failureReason: string;
+  captureStatus: DeliveryUnitCaptureStatus;
+  governanceStatus: BadCaseStatus | null;
+};
+
+export type DeliveryUnitPage = {
+  items: DeliveryUnitSummary[];
+  pagination: {
+    offset: number;
+    limit: number;
+    hasMore: boolean;
+  };
+  degradedCount: number;
+};
+
 export type SkillSummary = {
   id: string;
   name: string;
@@ -35,6 +79,8 @@ export type BadCaseStatus =
   | "attributed"
   | "assetized";
 
+export type BadCaseCaptureSource = "manual" | "prompt_first";
+
 export type AttributionType =
   | "skill_content_missing"
   | "skill_content_defect"
@@ -50,6 +96,10 @@ export type BadCase = {
   title: string;
   problem: string;
   expectedOutcome: string;
+  deliveryRef: string | null;
+  captureSource: BadCaseCaptureSource;
+  userFeedback: string;
+  failureReason: string;
   sourceSessionId: string | null;
   sourcePath: string | null;
   taskSummary: string;
@@ -84,6 +134,8 @@ export type Dashboard = {
   pipeline: PipelineCounts;
   totals: {
     sessions: number;
+    deliveryUnits?: number;
+    automaticCandidates?: number;
     badCases: number;
     evidence: number;
     registeredSkills: number;

@@ -209,4 +209,20 @@ Max parallelism: 2
 
 ## Completion Status
 
-`PLANNED`
+`DONE_WITH_CONCERNS`
+
+### Execution Log (2026-08-23)
+
+**Waves executed:** W1 (U1) · W2 (U2) · W3 (U4) · W4 (U3, U5) · W5 (U6)
+
+**Artifacts:** Delivery Unit indexer and tests; capture migrations/service/tests; Delivery Unit and capture APIs; stdio MCP adapter with one-shot metadata bridge and durable outbox; Delivery Unit workbench views and no-body POST regression fix; synthetic feedback matrix and pilot report.
+
+**Verification:** `npm test` passed with 62 tests (adapter 8, server 32, PC 22); `npm run build` passed for adapter, server and PC; `git diff --check` passed; local Delivery Unit API returned HTTP 200 with summary-only list payload.
+
+**Oracle verdict:** UNAVAILABLE - the single final Oracle call could not run because the configured model provider rejected the request for insufficient subscription quota.
+
+**Concerns:**
+
+- U6 automated contract evidence passed, but two isolated real Codex runs stalled after `task_started` without a model message, Skill read, tool call or `task_complete`; live trigger, false-positive, clarification and real association metrics remain incomplete.
+- The real pilot is explicitly blocked from expansion until a working model connection produces complete Skill deliveries and the five first-phase success criteria are measured.
+- Formal plugin installation and automatic per-call thread/turn injection remain deferred; the current adapter requires an explicit one-shot metadata bridge and fails closed when it is unavailable.
