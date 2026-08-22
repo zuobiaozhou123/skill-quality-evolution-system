@@ -1,0 +1,11 @@
+.DS_Store
+.runtime/
+node_modules/
+dist/
+pc/dist/
+server/dist/
+coverage/
+*.log
+*.tsbuildinfo
+pc/vite.config.js
+pc/vite.config.d.ts
