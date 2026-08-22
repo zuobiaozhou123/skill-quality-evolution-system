@@ -78,3 +78,4 @@ npm run build
 
 - [总体架构设计](docs/plans/2026-08-22-skill-quality-evolution-architecture-design.md)
 - [Bad Case 治理工作台 V0 设计](docs/plans/2026-08-22-bad-case-governance-v0-design.md)
+- [Prompt-first Bad Case 自动采集架构设计](docs/plans/2026-08-22-prompt-first-bad-case-capture-design.md)
