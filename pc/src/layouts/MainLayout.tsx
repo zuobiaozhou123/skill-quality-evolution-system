@@ -5,14 +5,12 @@ import {
   FlaskConical,
   Gauge,
   Inbox,
-  RadioTower,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 const navigation = [
   { to: "/", label: "治理总览", icon: Gauge },
-  { to: "/runs", label: "运行发现", icon: RadioTower },
   { to: "/bad-cases", label: "Bad Case", icon: Inbox },
   { to: "/evidence", label: "Evidence", icon: FileCheck2 },
   { to: "/skills", label: "Skill 资产", icon: Boxes },

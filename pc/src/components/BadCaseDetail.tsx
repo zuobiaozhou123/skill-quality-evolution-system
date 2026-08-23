@@ -1,6 +1,13 @@
 import { Alert, Button, Divider, Form, Input, Select, Space, Spin, Tag } from "antd";
-import { ArrowUpRight, Check, Save, X } from "lucide-react";
-import type { AttributionType, BadCase, DeliveryUnitDetail } from "../types";
+import dayjs from "dayjs";
+import { ArrowUpRight, Check, MessageSquareText, Save, X } from "lucide-react";
+import type {
+  AttributionType,
+  BadCase,
+  DeliveryUnitDetail,
+  SessionContext,
+  SessionContextEventType,
+} from "../types";
 
 const attributionOptions: Array<{ value: AttributionType; label: string }> = [
   { value: "skill_content_missing", label: "Skill 内容缺失" },
@@ -12,6 +19,17 @@ const attributionOptions: Array<{ value: AttributionType; label: string }> = [
   { value: "task_input", label: "任务输入问题" },
   { value: "insufficient_evidence", label: "证据不足" },
 ];
+
+const eventLabels: Record<SessionContextEventType, string> = {
+  task_started: "任务开始",
+  task_complete: "任务完成",
+  turn_context: "运行上下文",
+  user_message: "用户",
+  agent_message: "AI",
+  skill_read: "Skill 读取",
+  tool_call: "工具调用",
+  tool_output: "工具结果",
+};
 
 export const statusLabels: Record<BadCase["status"], { label: string; color: string }> = {
   pending_confirmation: { label: "待确认", color: "orange" },
@@ -26,6 +44,9 @@ type DetailProps = {
   delivery?: DeliveryUnitDetail;
   deliveryError?: string;
   deliveryLoading?: boolean;
+  sessionContext?: SessionContext;
+  sessionContextError?: string;
+  sessionContextLoading?: boolean;
   onSave: (values: Pick<BadCase, "title" | "problem" | "expectedOutcome">) => void | Promise<void>;
   onConfirm: () => void | Promise<void>;
   onReject: () => void | Promise<void>;
@@ -38,6 +59,9 @@ export function BadCaseDetail({
   delivery,
   deliveryError,
   deliveryLoading,
+  sessionContext,
+  sessionContextError,
+  sessionContextLoading,
   onSave,
   onConfirm,
   onReject,
@@ -65,7 +89,7 @@ export function BadCaseDetail({
             <div className="delivery-content">{item.userFeedback || "未读取到用户反馈"}</div>
           </section>
           <section>
-            <h3>自动判定原因</h3>
+            <h3>AI 识别的不满原因</h3>
             <div className="delivery-content">{item.failureReason || item.problem || "等待人工核查"}</div>
           </section>
         </div>
@@ -87,7 +111,75 @@ export function BadCaseDetail({
         </div>
       )}
 
-      {(item.captureSource === "prompt_first" || delivery || deliveryError) && <Divider />}
+      {sessionContextLoading && (
+        <div className="session-context-loading">
+          <Spin size="small" />
+          <span>正在读取 Session 完整上下文</span>
+        </div>
+      )}
+      {sessionContextError && (
+        <Alert
+          className="detail-context-alert"
+          description="Bad Case 记录和治理操作仍然可用，可稍后重试读取原始会话。"
+          message={sessionContextError}
+          showIcon
+          type="warning"
+        />
+      )}
+      {sessionContext && (
+        <section aria-labelledby="session-context-heading" className="session-context-section">
+          <div className="session-context-heading">
+            <div>
+              <span>SESSION CONTEXT</span>
+              <h2 id="session-context-heading">Session 完整上下文</h2>
+            </div>
+            <code>{sessionContext.threadId.slice(0, 12)}</code>
+          </div>
+          <div className="session-turn-list" role="list">
+            {sessionContext.turns.map((turn, index) => (
+              <article
+                className={`session-turn${turn.isTrigger ? " is-trigger" : ""}${turn.isFeedback ? " is-feedback" : ""}`}
+                key={turn.turnId}
+                role="listitem"
+              >
+                <header>
+                  <div>
+                    <span className="turn-index">第 {index + 1} 轮</span>
+                    <code>{turn.turnId}</code>
+                  </div>
+                  <Space size={4} wrap>
+                    {turn.isTrigger && <Tag color="orange">触发交付</Tag>}
+                    {turn.isFeedback && <Tag color="cyan">用户反馈</Tag>}
+                  </Space>
+                </header>
+                <div className="session-events">
+                  {turn.events.map((event, eventIndex) => (
+                    <div className={`session-event event-${event.type}`} key={`${event.timestamp}-${event.type}-${eventIndex}`}>
+                      <div className="session-event-meta">
+                        <span>{eventLabels[event.type]}</span>
+                        <time dateTime={event.timestamp}>{event.timestamp ? dayjs(event.timestamp).format("HH:mm:ss") : "--:--:--"}</time>
+                      </div>
+                      <div className="session-event-content">{event.content || event.summary}</div>
+                      {event.truncated && <span className="context-truncated">内容过长，已在安全上限处截断</span>}
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+      {!item.deliveryRef && (
+        <div className="session-context-empty">
+          <MessageSquareText aria-hidden size={18} />
+          <div>
+            <strong>无关联 Session 上下文</strong>
+            <span>该记录为人工提交，可继续确认、归因和资产化。</span>
+          </div>
+        </div>
+      )}
+
+      {(item.captureSource === "prompt_first" || delivery || deliveryError || sessionContext || sessionContextError || !item.deliveryRef) && <Divider />}
 
       <Form
         form={form}

@@ -8,7 +8,11 @@ import type {
   DeliveryUnitDiagnostic,
   DeliveryUnitIndexResult,
 } from "../domain/types.js";
-import { listJsonlFiles, loadedSkillsFromToolInput } from "./session-indexer.js";
+import {
+  listJsonlFiles,
+  loadedSkillsFromToolInput,
+  toolCallFromSessionPayload,
+} from "./session-indexer.js";
 
 type SessionEvent = {
   timestamp?: string;
@@ -117,8 +121,9 @@ async function parseDeliverySession(sourcePath: string): Promise<DeliveryUnitInd
       continue;
     }
 
-    if (payload.type === "custom_tool_call" && active) {
-      for (const skillName of loadedSkillsFromToolInput(payload.input)) {
+    const toolCall = active ? toolCallFromSessionPayload(payload) : null;
+    if (active && toolCall) {
+      for (const skillName of loadedSkillsFromToolInput(toolCall.input)) {
         active.actualSkills.add(skillName);
       }
       continue;

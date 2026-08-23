@@ -7,7 +7,7 @@ import type { SessionSignal, SessionSummary } from "../domain/types.js";
 const CORRECTION_PATTERN = /(?:不对|错了|错误|重新|重做|修正|wrong|incorrect|redo|retry)/i;
 const SKILL_PATH_PATTERN =
   /\.codex\/(?:skills\/(?:\.system\/)?[^/"'\\\s]+|plugins\/[^"'\\\s]+\/skills\/[^/"'\\\s]+)\/SKILL\.md/g;
-const READ_COMMAND_PATTERN = /^\s*(?:sed|cat|head|tail|less|bat)\b/;
+const READ_COMMAND_PATTERN = /^\s*(?:sed|cat|head|tail|less|bat|rg|grep)\b/;
 
 function skillNameFromPath(skillPath: string): string | null {
   const parts = skillPath.split("/");
@@ -66,6 +66,31 @@ export function loadedSkillsFromToolInput(input: unknown): string[] {
     }
   }
   return [...found];
+}
+
+export function toolCallFromSessionPayload(
+  payload: Record<string, unknown>,
+): { input: unknown; name?: string } | null {
+  if (payload.type === "custom_tool_call") {
+    return {
+      input: payload.input,
+      name: typeof payload.name === "string" ? payload.name : undefined,
+    };
+  }
+  if (payload.type === "function_call") {
+    return {
+      input: payload.arguments,
+      name: typeof payload.name === "string" ? payload.name : undefined,
+    };
+  }
+  return null;
+}
+
+export function toolOutputFromSessionPayload(payload: Record<string, unknown>): unknown | null {
+  if (payload.type === "custom_tool_call_output" || payload.type === "function_call_output") {
+    return payload.output;
+  }
+  return null;
 }
 
 export async function listJsonlFiles(root: string): Promise<string[]> {

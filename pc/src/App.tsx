@@ -1,22 +1,21 @@
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { createBrowserRouter, Navigate, RouterProvider, type RouteObject } from "react-router-dom";
 import { MainLayout } from "./layouts/MainLayout";
 import { BadCasesPage } from "./pages/BadCasesPage";
 import { EvidencePage } from "./pages/EvidencePage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { ProposalsPage } from "./pages/ProposalsPage";
 import { ReleasesPage } from "./pages/ReleasesPage";
-import { RunsPage } from "./pages/RunsPage";
 import { SkillsPage } from "./pages/SkillsPage";
 
-const router = createBrowserRouter([
+export const appRoutes: RouteObject[] = [
   {
     path: "/",
     element: <MainLayout />,
     children: [
       { index: true, element: <OverviewPage /> },
-      { path: "runs", element: <RunsPage /> },
+      { path: "runs", element: <Navigate replace to="/bad-cases" /> },
       { path: "bad-cases", element: <BadCasesPage /> },
       { path: "evidence", element: <EvidencePage /> },
       { path: "skills", element: <SkillsPage /> },
@@ -24,7 +23,9 @@ const router = createBrowserRouter([
       { path: "releases", element: <ReleasesPage /> },
     ],
   },
-]);
+];
+
+const router = createBrowserRouter(appRoutes);
 
 export function App() {
   return (

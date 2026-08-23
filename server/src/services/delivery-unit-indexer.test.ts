@@ -41,8 +41,18 @@ describe("indexDeliveryUnits", () => {
       {
         type: "response_item",
         payload: {
-          type: "custom_tool_call",
-          input: '{"cmd":"cat /Users/example/.codex/skills/xlsx/SKILL.md"}',
+          type: "function_call",
+          name: "exec_command",
+          arguments: '{"cmd":"cat /Users/example/.codex/skills/xlsx/SKILL.md"}',
+        },
+      },
+      {
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          name: "exec_command",
+          arguments:
+            '{"cmd":"rg -n \\"规则\\" /Users/example/.codex/skills/requirements-analysis/SKILL.md"}',
         },
       },
       {
@@ -115,7 +125,7 @@ describe("indexDeliveryUnits", () => {
       cwd: "/workspace/turn-one",
       userRequest: "请分析这个表格",
       finalAnswer: "最终交付",
-      actualSkills: ["xlsx"],
+      actualSkills: ["requirements-analysis", "xlsx"],
       nextUserFeedback: "不对，请重新核对公式",
       sourcePath,
     });

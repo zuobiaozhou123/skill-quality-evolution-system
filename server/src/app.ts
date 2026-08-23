@@ -1,11 +1,17 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type { AttributionType, SessionSignal } from "./domain/types.js";
+import type {
+  AttributionType,
+  CaptureDiagnostics,
+  SessionContextErrorCode,
+  SessionSignal,
+} from "./domain/types.js";
 import { BadCaseService } from "./services/bad-case-service.js";
 import { CaptureService } from "./services/capture-service.js";
 import { findDeliveryUnit, indexDeliveryUnits } from "./services/delivery-unit-indexer.js";
 import { indexSessions } from "./services/session-indexer.js";
+import { findSessionContext } from "./services/session-context-indexer.js";
 import { SkillRegistry } from "./services/skill-registry.js";
 import { scanSkills } from "./services/skill-scanner.js";
 import { createDatabase } from "./storage/database.js";
@@ -16,6 +22,11 @@ export type AppOptions = {
   registryPath: string;
   evidenceRoot: string;
   databasePath: string;
+  outboxPath?: string;
+};
+
+type OutboxEntrySnapshot = {
+  lastError?: unknown;
 };
 
 async function readEvidence(root: string): Promise<unknown[]> {
@@ -38,6 +49,39 @@ function summarize(value: string, maximum: number): string {
   const normalized = value.replace(/\s+/g, " ").trim();
   if (normalized.length <= maximum) return normalized;
   return `${normalized.slice(0, maximum - 3)}...`;
+}
+
+function contextError(code: SessionContextErrorCode, error: string) {
+  return { code, error };
+}
+
+async function readOutboxDiagnostics(outboxPath: string): Promise<CaptureDiagnostics["outbox"]> {
+  try {
+    const parsed = JSON.parse(await readFile(outboxPath, "utf8")) as {
+      version?: unknown;
+      items?: unknown;
+    };
+    if (parsed.version !== 1 || !Array.isArray(parsed.items)) throw new Error("Invalid outbox");
+    const items = parsed.items as OutboxEntrySnapshot[];
+    let lastError: string | null = null;
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const candidate = items[index]?.lastError;
+      if (typeof candidate === "string") {
+        lastError = candidate;
+        break;
+      }
+    }
+    return {
+      status: items.length > 0 ? "pending" : "clear",
+      pendingCount: items.length,
+      lastError,
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { status: "clear", pendingCount: 0, lastError: null };
+    }
+    return { status: "unavailable", pendingCount: 0, lastError: "Outbox 状态不可读" };
+  }
 }
 
 export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
@@ -132,6 +176,53 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     },
   );
 
+  app.get<{ Params: { deliveryRef: string } }>(
+    "/api/delivery-units/:deliveryRef/session-context",
+    async (request, reply) => {
+      const deliveryRef = request.params.deliveryRef.trim();
+      const separator = deliveryRef.indexOf(":");
+      if (separator <= 0 || separator === deliveryRef.length - 1) {
+        return reply
+          .status(400)
+          .send(contextError("delivery_ref_invalid", "Delivery Unit 引用格式无效"));
+      }
+
+      let delivery;
+      try {
+        delivery = await findDeliveryUnit(options.sessionsRoot, deliveryRef);
+      } catch {
+        return reply
+          .status(503)
+          .send(contextError("source_unavailable", "Session 源文件不可用"));
+      }
+      if (!delivery) {
+        return reply
+          .status(404)
+          .send(contextError("delivery_not_found", "Delivery Unit 不存在"));
+      }
+
+      let context;
+      try {
+        context = await findSessionContext(options.sessionsRoot, deliveryRef);
+      } catch {
+        return reply
+          .status(503)
+          .send(contextError("source_unavailable", "Session 源文件不可用"));
+      }
+      if (
+        !context ||
+        context.deliveryRef !== delivery.deliveryRef ||
+        context.threadId !== delivery.threadId ||
+        context.triggerTurnId !== delivery.turnId
+      ) {
+        return reply
+          .status(422)
+          .send(contextError("context_parse_failed", "Session 上下文无法精确关联"));
+      }
+      return context;
+    },
+  );
+
   app.post<{
     Body: { deliveryRef?: string; failureReason?: string };
   }>("/api/captures/record-bad-case", async (request, reply) => {
@@ -152,6 +243,46 @@ export async function buildApp(options: AppOptions): Promise<FastifyInstance> {
     if (result.status === "association_failed") return reply.status(422).send(response);
     if (result.status === "captured") return reply.status(201).send(response);
     return response;
+  });
+
+  app.get("/api/capture-diagnostics", async (): Promise<CaptureDiagnostics> => {
+    const events = captures.listEvents();
+    const outboxPath =
+      options.outboxPath ?? path.join(path.dirname(options.databasePath), "bad-case-capture-outbox.json");
+    const [outbox, index] = await Promise.all([
+      readOutboxDiagnostics(outboxPath),
+      indexDeliveryUnits(options.sessionsRoot, 100).then(
+        (result): CaptureDiagnostics["index"] => ({
+          status: result.diagnostics.length > 0 ? "degraded" : "healthy",
+          degradedCount: result.diagnostics.length,
+        }),
+        (): CaptureDiagnostics["index"] => ({ status: "unavailable", degradedCount: 0 }),
+      ),
+    ]);
+    const associationFailed = events.filter((event) => event.status === "association_failed").length;
+    const needsAttention =
+      associationFailed > 0 || outbox.status !== "clear" || index.status !== "healthy";
+    return {
+      status: needsAttention ? "attention" : "healthy",
+      serviceStatus: "available",
+      checkedAt: new Date().toISOString(),
+      summary: {
+        total: events.length,
+        captured: events.filter((event) => event.status === "captured").length,
+        duplicate: events.filter((event) => event.status === "duplicate").length,
+        associationFailed,
+      },
+      outbox,
+      index,
+      recentEvents: events.slice(0, 10).map((event) => ({
+        id: event.id,
+        deliveryRef: event.deliveryRef,
+        status: event.status,
+        failureReason: event.failureReason,
+        associationError: event.associationError,
+        createdAt: event.createdAt,
+      })),
+    };
   });
 
   app.get("/api/bad-cases", async () => ({ items: badCases.list() }));

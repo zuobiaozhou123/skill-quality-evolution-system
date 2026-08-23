@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { BadCaseDetail } from "./BadCaseDetail";
-import type { BadCase } from "../types";
+import type { BadCase, SessionContext } from "../types";
 
 const baseCase: BadCase = {
   id: "case-1",
@@ -35,6 +35,65 @@ const actions = {
   onReject: vi.fn(),
   onAttribute: vi.fn(),
   onPromote: vi.fn(),
+};
+
+const sessionContext: SessionContext = {
+  threadId: "thread-1",
+  deliveryRef: "thread-1:turn-1",
+  sourcePath: "/private/session.jsonl",
+  triggerTurnId: "turn-1",
+  feedbackTurnId: "turn-2",
+  feedback: "不对，你覆盖了原始公式，请重做。",
+  turns: [
+    {
+      turnId: "turn-1",
+      startedAt: "2026-08-22T07:59:00.000Z",
+      completedAt: "2026-08-22T08:00:00.000Z",
+      isTrigger: true,
+      isFeedback: false,
+      events: [
+        {
+          type: "user_message",
+          timestamp: "2026-08-22T07:59:01.000Z",
+          turnId: "turn-1",
+          summary: "请更新表格并保留公式",
+          content: "请更新表格并保留公式",
+        },
+        {
+          type: "skill_read",
+          timestamp: "2026-08-22T07:59:02.000Z",
+          turnId: "turn-1",
+          summary: "读取 Skill: xlsx",
+          content: "读取 Skill: xlsx",
+          skillName: "xlsx",
+        },
+        {
+          type: "agent_message",
+          timestamp: "2026-08-22T08:00:00.000Z",
+          turnId: "turn-1",
+          summary: "已更新表格",
+          content: "已更新表格",
+          phase: "final_answer",
+        },
+      ],
+    },
+    {
+      turnId: "turn-2",
+      startedAt: "2026-08-22T08:01:00.000Z",
+      completedAt: null,
+      isTrigger: false,
+      isFeedback: true,
+      events: [
+        {
+          type: "user_message",
+          timestamp: "2026-08-22T08:01:01.000Z",
+          turnId: "turn-2",
+          summary: "不对，你覆盖了原始公式，请重做。",
+          content: "不对，你覆盖了原始公式，请重做。",
+        },
+      ],
+    },
+  ],
 };
 
 describe("BadCaseDetail", () => {
@@ -104,5 +163,29 @@ describe("BadCaseDetail", () => {
     );
 
     expect(screen.getByText("Delivery Unit 源日志不可用")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "确认问题" })).toBeInTheDocument();
+  });
+
+  it("renders the complete session timeline and highlights trigger and feedback turns", () => {
+    render(
+      <BadCaseDetail
+        item={{ ...baseCase, deliveryRef: "thread-1:turn-1", captureSource: "prompt_first" }}
+        sessionContext={sessionContext}
+        {...actions}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "Session 完整上下文" })).toBeInTheDocument();
+    expect(screen.getByText("触发交付")).toBeInTheDocument();
+    expect(screen.getByText("用户反馈")).toBeInTheDocument();
+    expect(screen.getByText("读取 Skill: xlsx")).toBeInTheDocument();
+    expect(screen.getAllByText("已更新表格").length).toBeGreaterThan(0);
+  });
+
+  it("explains that manual cases have no linked session without blocking governance", () => {
+    render(<BadCaseDetail item={{ ...baseCase, sourceSessionId: null }} {...actions} />);
+
+    expect(screen.getByText("无关联 Session 上下文")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "确认问题" })).toBeInTheDocument();
   });
 });

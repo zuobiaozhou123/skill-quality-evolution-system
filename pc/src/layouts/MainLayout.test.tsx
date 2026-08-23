@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { MainLayout } from "./MainLayout";
 
 describe("MainLayout", () => {
-  it("shows the complete governance navigation", () => {
+  it("uses Bad Case as the governance entry and removes Runs from primary navigation", () => {
     render(
       <MemoryRouter future={{ v7_relativeSplatPath: true, v7_startTransition: true }}>
         <MainLayout content={<div>content</div>} />
@@ -13,7 +13,6 @@ describe("MainLayout", () => {
 
     for (const label of [
       "治理总览",
-      "运行发现",
       "Bad Case",
       "Evidence",
       "Skill 资产",
@@ -22,5 +21,6 @@ describe("MainLayout", () => {
     ]) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+    expect(screen.queryByText("运行发现")).not.toBeInTheDocument();
   });
 });

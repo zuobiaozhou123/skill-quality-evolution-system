@@ -53,6 +53,57 @@ export type DeliveryUnitIndexResult = {
   diagnostics: DeliveryUnitDiagnostic[];
 };
 
+export type SessionContextEventType =
+  | "task_started"
+  | "task_complete"
+  | "turn_context"
+  | "user_message"
+  | "agent_message"
+  | "skill_read"
+  | "tool_call"
+  | "tool_output";
+
+export type SessionContextEvent = {
+  type: SessionContextEventType;
+  timestamp: string;
+  turnId: string;
+  summary: string;
+  content?: string;
+  skillName?: string;
+  phase?: string;
+  truncated?: boolean;
+};
+
+export type SessionContextTurn = {
+  turnId: string;
+  startedAt: string;
+  completedAt: string | null;
+  isTrigger: boolean;
+  isFeedback: boolean;
+  events: SessionContextEvent[];
+};
+
+export type SessionContext = {
+  threadId: string;
+  deliveryRef: string;
+  sourcePath: string;
+  triggerTurnId: string;
+  feedbackTurnId: string | null;
+  feedback: string | null;
+  turns: SessionContextTurn[];
+};
+
+export type SessionContextErrorCode =
+  | "delivery_ref_invalid"
+  | "delivery_not_found"
+  | "source_unavailable"
+  | "context_parse_failed";
+
+export type SessionContextError = {
+  error: string;
+  code: SessionContextErrorCode;
+};
+
 export type BadCaseStatus =
   | "pending_confirmation"
   | "confirmed"
@@ -116,4 +167,31 @@ export type CaptureEvent = {
   badCaseId: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type CaptureDiagnosticEvent = Pick<
+  CaptureEvent,
+  "id" | "deliveryRef" | "status" | "failureReason" | "associationError" | "createdAt"
+>;
+
+export type CaptureDiagnostics = {
+  status: "healthy" | "attention";
+  serviceStatus: "available";
+  checkedAt: string;
+  summary: {
+    total: number;
+    captured: number;
+    duplicate: number;
+    associationFailed: number;
+  };
+  outbox: {
+    status: "clear" | "pending" | "unavailable";
+    pendingCount: number;
+    lastError: string | null;
+  };
+  index: {
+    status: "healthy" | "degraded" | "unavailable";
+    degradedCount: number;
+  };
+  recentEvents: CaptureDiagnosticEvent[];
 };

@@ -28,8 +28,9 @@ async function writeSession(
     events.push({
       type: "response_item",
       payload: {
-        type: "custom_tool_call",
-        input: '{"cmd":"cat /Users/example/.codex/skills/xlsx/SKILL.md"}',
+        type: "function_call",
+        name: "exec_command",
+        arguments: '{"cmd":"cat /Users/example/.codex/skills/xlsx/SKILL.md"}',
       },
     });
   }

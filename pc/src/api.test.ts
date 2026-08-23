@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api } from "./api";
+import { ApiError, api } from "./api";
 
 describe("api client", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -63,5 +63,44 @@ describe("api client", () => {
       "/api/delivery-units/thread%201%3Aturn%2F2",
       expect.any(Object),
     );
+  });
+
+  it("encodes the delivery reference when loading the session timeline", async () => {
+    const context = {
+      deliveryRef: "thread 1:turn/2",
+      threadId: "thread 1",
+      triggerTurnId: "turn/2",
+      feedbackTurnId: null,
+      feedback: null,
+      sourcePath: "/sessions/example.jsonl",
+      turns: [],
+    };
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => context,
+    }));
+
+    await expect(api.getSessionContext("thread 1:turn/2")).resolves.toEqual(context);
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/delivery-units/thread%201%3Aturn%2F2/session-context",
+      expect.any(Object),
+    );
+  });
+
+  it("preserves a stable context error code for the UI", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: "Session 源文件不可用", code: "source_unavailable" }),
+    }));
+
+    const error = await api.getSessionContext("thread:turn").catch((caught) => caught);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      message: "Session 源文件不可用",
+      code: "source_unavailable",
+      status: 503,
+    });
   });
 });

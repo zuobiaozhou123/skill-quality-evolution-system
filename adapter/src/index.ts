@@ -10,7 +10,7 @@ import { DurableOutbox, type OutboxEntry } from "./outbox.js";
 const DEFAULT_ENDPOINT = "http://127.0.0.1:4317/api/captures/record-bad-case";
 const DEFAULT_CONTEXT_TTL_MS = 10 * 60 * 1_000;
 const DEFAULT_RETRY_INTERVAL_MS = 30_000;
-const DEFAULT_REQUEST_TIMEOUT_MS = 2_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
 
 type RuntimeMetadata = {
   threadId: string;

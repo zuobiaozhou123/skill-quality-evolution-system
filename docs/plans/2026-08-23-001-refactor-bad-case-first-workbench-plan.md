@@ -179,4 +179,16 @@ Max parallelism: 2 (Wave 3)
 
 ## Completion Status
 
-`PLANNED`
+`DONE_WITH_CONCERNS`
+
+### Execution Log (2026-08-23)
+
+**Waves executed:** W1 (U1) · W2 (U2) · W3 (U3, U4) · W4 (U5)
+**Artifacts:** `server/src/services/session-context-indexer.ts`, `server/src/app.ts`, `pc/src/pages/BadCasesPage.tsx`, `pc/src/components/BadCaseDetail.tsx`, `pc/src/pages/OverviewPage.tsx`, `adapter/src/index.ts`, `README.md`, `docs/validation/prompt-first-bad-case-capture-pilot.md`
+**Oracle verdict:** PASS - Bad Case First 前台、上下文 API、诊断和组合集成已完成；真实桌面自动采集仍有运行时风险。
+**Concerns:**
+
+- 真实模型 2/2 识别负反馈并发起 `record_bad_case`，但非交互 Codex 审批 2/2 取消，模型进程内持久化仍为 0/2。
+- 工具审批取消、`runtime_context_unavailable` 等进入后台 API 之前的失败尚未进入工作台诊断。
+- MCP 运行时根目录未固定为绝对路径，跨项目会话可能造成 context/outbox 路径漂移。
+- `degradedCount` 混入正常无 Skill 轮次和未完成轮次，诊断噪声偏高；Session 事件的 `truncated` 标志也可能仅因摘要截断而误报。

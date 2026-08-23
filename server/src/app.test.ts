@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { appendFile, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -29,8 +29,9 @@ async function createFixture() {
   );
   const userRequest = `请检查这份表格的公式，${"请保留原始公式。".repeat(30)}`;
   const finalAnswer = `已完成检查，${"所有公式都已重新写入。".repeat(30)}`;
+  const deliveryPath = path.join(sessionsRoot, "2026", "08", "22", "delivery.jsonl");
   await writeFile(
-    path.join(sessionsRoot, "2026", "08", "22", "delivery.jsonl"),
+    deliveryPath,
     [
       {
         timestamp: "2026-08-22T09:00:00.000Z",
@@ -81,6 +82,7 @@ async function createFixture() {
     registryPath: path.join(governanceRoot, "registry", "skills.json"),
     evidenceRoot: path.join(governanceRoot, "evidence"),
     databasePath: path.join(runtimeRoot, "state.sqlite"),
+    deliveryPath,
     userRequest,
     finalAnswer,
   };
@@ -173,6 +175,77 @@ describe("governance API", () => {
     });
   });
 
+  it("returns the exact delivery session context as a lazy-loaded timeline", async () => {
+    const fixture = await createFixture();
+    app = await buildApp(fixture);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/delivery-units/thread-delivery%3Aturn-delivery/session-context",
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      deliveryRef: "thread-delivery:turn-delivery",
+      threadId: "thread-delivery",
+      triggerTurnId: "turn-delivery",
+      feedbackTurnId: "turn-feedback",
+      feedback: "不对，你覆盖了原始公式，请重做",
+      turns: [
+        expect.objectContaining({ turnId: "turn-delivery", isTrigger: true }),
+        expect.objectContaining({ turnId: "turn-feedback", isFeedback: true }),
+      ],
+    });
+  });
+
+  it.each([
+    ["invalid", 400, "delivery_ref_invalid"],
+    ["missing%3Aturn", 404, "delivery_not_found"],
+  ])("returns a stable context error for %s", async (deliveryRef, status, code) => {
+    const fixture = await createFixture();
+    app = await buildApp(fixture);
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/delivery-units/${deliveryRef}/session-context`,
+    });
+
+    expect(response.statusCode).toBe(status);
+    expect(response.json()).toMatchObject({ error: expect.any(String), code });
+  });
+
+  it("distinguishes an unavailable session source from a missing delivery", async () => {
+    const fixture = await createFixture();
+    const unavailableRoot = path.join(fixture.root, "sessions-as-file");
+    await writeFile(unavailableRoot, "not a directory");
+    app = await buildApp({ ...fixture, sessionsRoot: unavailableRoot });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/delivery-units/thread-delivery%3Aturn-delivery/session-context",
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ code: "source_unavailable" });
+  });
+
+  it("fails closed when parsed context belongs to a different thread", async () => {
+    const fixture = await createFixture();
+    await appendFile(
+      fixture.deliveryPath,
+      `${JSON.stringify({ type: "session_meta", payload: { id: "thread-other" } })}\n`,
+    );
+    app = await buildApp(fixture);
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/delivery-units/thread-delivery%3Aturn-delivery/session-context",
+    });
+
+    expect(response.statusCode).toBe(422);
+    expect(response.json()).toMatchObject({ code: "context_parse_failed" });
+  });
+
   it("freezes an idempotent record_bad_case response contract", async () => {
     const fixture = await createFixture();
     app = await buildApp(fixture);
@@ -263,6 +336,107 @@ describe("governance API", () => {
     expect(legacySessions.json().items).toEqual(
       expect.arrayContaining([expect.objectContaining({ id: "s1" })]),
     );
+  });
+
+  it("summarizes recent capture outcomes without exposing session content", async () => {
+    const fixture = await createFixture();
+    app = await buildApp(fixture);
+    const payload = {
+      deliveryRef: "thread-delivery:turn-delivery",
+      failureReason: "交付覆盖了原始公式",
+    };
+    await app.inject({ method: "POST", url: "/api/captures/record-bad-case", payload });
+    await app.inject({ method: "POST", url: "/api/captures/record-bad-case", payload });
+    await app.inject({
+      method: "POST",
+      url: "/api/captures/record-bad-case",
+      payload: { deliveryRef: "missing:turn", failureReason: "无法关联上一轮交付" },
+    });
+
+    const response = await app.inject({ method: "GET", url: "/api/capture-diagnostics" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: "attention",
+      serviceStatus: "available",
+      checkedAt: expect.any(String),
+      summary: { total: 3, captured: 1, duplicate: 1, associationFailed: 1 },
+      outbox: { status: "clear", pendingCount: 0, lastError: null },
+      index: { status: "degraded", degradedCount: expect.any(Number) },
+      recentEvents: [
+        expect.objectContaining({
+          status: "association_failed",
+          deliveryRef: "missing:turn",
+          failureReason: "无法关联上一轮交付",
+          associationError: "delivery_not_found",
+        }),
+        expect.objectContaining({ status: "duplicate" }),
+        expect.objectContaining({ status: "captured" }),
+      ],
+    });
+    expect(response.json().recentEvents[0]).not.toHaveProperty("userFeedback");
+    expect(response.json().recentEvents[0]).not.toHaveProperty("sourcePath");
+  });
+
+  it("reports an empty capture inbox and a pending adapter outbox", async () => {
+    const fixture = await createFixture();
+    await mkdir(fixture.runtimeRoot, { recursive: true });
+    await writeFile(
+      path.join(fixture.runtimeRoot, "bad-case-capture-outbox.json"),
+      JSON.stringify({
+        version: 1,
+        items: [
+          {
+            id: "queued-1",
+            deliveryRef: "thread-queued:turn-queued",
+            failureReason: "待重试",
+            createdAt: "2026-08-23T01:00:00.000Z",
+            attempts: 2,
+            lastAttemptAt: "2026-08-23T01:02:00.000Z",
+            lastError: "HTTP 503",
+          },
+        ],
+      }),
+    );
+    app = await buildApp(fixture);
+
+    const response = await app.inject({ method: "GET", url: "/api/capture-diagnostics" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: "attention",
+      summary: { total: 0, captured: 0, duplicate: 0, associationFailed: 0 },
+      outbox: { status: "pending", pendingCount: 1, lastError: "HTTP 503" },
+      recentEvents: [],
+    });
+  });
+
+  it("keeps capture diagnostics available when the session index source is unavailable", async () => {
+    const fixture = await createFixture();
+    const unavailableRoot = path.join(fixture.root, "sessions-as-file");
+    await writeFile(unavailableRoot, "not a directory");
+    app = await buildApp({ ...fixture, sessionsRoot: unavailableRoot });
+    await app.inject({
+      method: "POST",
+      url: "/api/captures/record-bad-case",
+      payload: { deliveryRef: "thread-delivery:turn-delivery", failureReason: "需要重做" },
+    });
+
+    const response = await app.inject({ method: "GET", url: "/api/capture-diagnostics" });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      status: "attention",
+      serviceStatus: "available",
+      summary: { associationFailed: 1 },
+      index: { status: "unavailable", degradedCount: 0 },
+      recentEvents: [
+        expect.objectContaining({
+          status: "association_failed",
+          associationError: "source_unavailable",
+        }),
+      ],
+    });
   });
 
   it("moves a bad case through confirmation, attribution and evidence", async () => {

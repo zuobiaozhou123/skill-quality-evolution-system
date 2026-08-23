@@ -1,13 +1,15 @@
 # Skill 质量保障与自进化系统
 
-这是一个个人优先、可演进到团队和企业形态的 Skill 治理控制台。V0 已搭建人工治理骨架；当前正在接入 Prompt-first 自动采集，把用户对上一轮 Skill 交付的明确负反馈沉淀为待确认 Bad Case。系统暂不生成候选版本、运行 Skill 评测或修改正式 Skill。
+这是一个个人优先、可演进到团队和企业形态的 Skill 治理控制台。当前采用 Bad Case First：用户对上一轮 Skill 交付的明确负反馈由对话层识别，静默沉淀为待确认 Bad Case；完整 Session 只在详情中按需读取。系统暂不生成候选版本、运行 Skill 评测或修改正式 Skill。
 
 ## 当前闭环
 
 ```text
-Codex 运行记录（只读）
-  -> 运行发现
-  -> 人工标记 Bad Case
+Codex 下一轮用户反馈
+  -> AI 识别明确否定 / 纠错 / 返工
+  -> record_bad_case（静默）
+  -> 待确认 Bad Case
+  -> 按 deliveryRef 读取完整 Session
   -> 确认 / 驳回
   -> 失败归因
   -> Evidence 资产化
@@ -15,7 +17,7 @@ Codex 运行记录（只读）
   -> 人工审批与发布（尚未启用）
 ```
 
-前台七个模块分别对应治理总览、运行发现、Bad Case、Evidence、Skill 资产、变更提案和发布中心。后台负责会话索引、Skill 扫描、状态迁移、Evidence 写入和总览聚合。
+Bad Case 收集箱是唯一治理主入口；旧 `/runs` 路由兼容跳转到该入口。后台仍保留 Delivery Unit/Session 索引、Skill 扫描、采集诊断、状态迁移和 Evidence 写入，用于精确关联与取证，不把全部正常运行暴露为日常治理列表。
 
 ## 本地启动
 
@@ -47,7 +49,7 @@ npm run build -w adapter
 node adapter/dist/index.js self-check
 ```
 
-审查后可按以下命令注册本地 MCP。仓库不会自动执行该命令，也不会修改用户级 Codex 配置：
+审查后可按以下命令注册本地 MCP。重复安装前先用 `codex mcp get skill-governance --json` 核对现有配置：
 
 ```bash
 codex mcp add skill-governance -- node "/绝对路径/adapter/dist/index.js" serve
@@ -55,6 +57,8 @@ codex mcp get skill-governance --json
 ```
 
 提示片段位于 [`integration/AGENTS.bad-case-capture.md`](integration/AGENTS.bad-case-capture.md)。个人验证时只把标记之间的短正文加入全局 `AGENTS.md`；本仓库不会自动修改全局提示词。
+
+修改用户级 MCP 或全局 `AGENTS.md` 后，需要新建 Codex 进程或重启桌面应用，已有会话不会自动获得新工具。非交互 `codex exec` 可能因工具审批把写操作标记为 `user cancelled MCP tool call`；不要用全权限绕过参数冒充真实自动采集，详情见试点报告。
 
 ### 元数据桥接边界
 
@@ -68,7 +72,7 @@ node adapter/dist/index.js bind-context \
 
 这个命令只搬运元数据，不读取或判断用户反馈。上下文带过期时间且只消费一次；缺失、过期、格式错误或无法关联时，适配器不会按时间猜测，也不会创建 Bad Case。API 暂时不可用时，事件保留在 `.runtime/bad-case-capture-outbox.json`，MCP 进程每 30 秒重试；后台通过同一 `deliveryRef` 保证幂等。
 
-本机 `codex-cli 0.133.0` 已验证 `hooks`、`plugin_hooks` 为 stable，且 `codex mcp add` 支持 stdio 服务。但官方 Codex Hooks 页面在当前网络环境返回 403，`codex mcp --help` 也没有证明工具调用会自动携带线程和轮次。因此当前实现不假设存在未文档化的逐调用上下文，也不提供未经真实 Hook 载荷验证的字段映射。Hook 的最终配置和端到端安装留到真实对话试点；即使桥接或投递失败，也不得在用户回复中播报治理状态。
+本机 `codex-cli 0.133.0` 已验证 `codex mcp add` 支持 stdio 服务。当前实现不假设工具调用会自动携带线程和轮次，也不提供未经验证的 Hook 字段映射；每次采集前仍需要显式绑定准确元数据。即使桥接、审批或投递失败，也不得在用户回复中播报治理状态。
 
 可覆盖的适配器环境变量：
 
@@ -114,7 +118,8 @@ node adapter/dist/index.js bind-context \
 
 ## 当前边界
 
-- 人工 Bad Case 治理链路已可用；Prompt-first 的后台 API 和本地适配器已进入实施，真实 Codex Hook 映射与端到端试点尚未完成。
+- Bad Case First 工作台、完整 Session 时间线、采集诊断、后台 API 和本地适配器已可用。
+- Prompt-first 真实模型能识别明确负反馈并发起 `record_bad_case`；非交互 CLI 的工具审批仍会取消写调用，桌面新会话中的无干扰自动执行尚待复验。
 - 请求和交付全文继续只从本机会话按需读取，不写入 outbox 或 Git。
 - 总览展示登记数量，完整 Skill 清单和登记状态在“Skill 资产”页面查看。
 - 变更提案、自动评测、候选生成、审批、发布和回滚只有结构占位，需在确定首批试点和成功标准后启用。
